@@ -1,6 +1,4 @@
-import chromium from "chrome-aws-lambda";
-
-export async function handler(event, context) {
+  export async function handler(event) {
   if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
@@ -18,74 +16,45 @@ export async function handler(event, context) {
       };
     }
 
-    const browser = await chromium.puppeteer.launch({
-      args: [
-        ...chromium.args,
-        "--disable-blink-features=AutomationControlled",
-      ],
-      defaultViewport: {
-        width: 1280,
-        height: 800,
-      },
-      executablePath: await chromium.executablePath,
-      headless: true,
-    });
-
-    const page = await browser.newPage();
-
-    // ✅ Set realistic user agent
-    await page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    const response = await fetch(
+      `https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`,
+      {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+          "x-ig-app-id": "936619743392459"
+        }
+      }
     );
 
-    // ✅ Extra headers
-    await page.setExtraHTTPHeaders({
-      "accept-language": "en-US,en;q=0.9",
-    });
+    if (!response.ok) {
+      return {
+        statusCode: 404,
+        body: JSON.stringify({ error: "Profile not found or blocked" }),
+      };
+    }
 
-    // ✅ Remove webdriver flag
-    await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, "webdriver", {
-        get: () => false,
-      });
-    });
+    const data = await response.json();
 
-    const url = `https://www.instagram.com/${username}/`;
-
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
-
-    // small delay (helps avoid bot detection)
-    await page.waitForTimeout(3000);
-
-    const data = await page.evaluate(() => {
-      const meta = document.querySelector('meta[property="og:description"]');
-      const bio = meta ? meta.content : null;
-
-      const img = document.querySelector("img");
-      const profilePic = img ? img.src : null;
-
-      return { bio, profilePic };
-    });
-
-    await browser.close();
+    const user = data.data.user;
 
     return {
       statusCode: 200,
       body: JSON.stringify({
         success: true,
-        bio: data.bio,
-        profilePic: data.profilePic,
+        bio: user.biography,
+        profilePic: user.profile_pic_url_hd,
+        followers: user.edge_followed_by.count
       }),
     };
-  } catch (error) {
-    console.error("Scrape Error:", error);
 
+  } catch (err) {
     return {
       statusCode: 500,
       body: JSON.stringify({
         error: "Failed to fetch Instagram data",
-        details: error.message,
+        details: err.message,
       }),
     };
   }
-}
+  }
