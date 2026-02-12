@@ -21,35 +21,50 @@ export async function handler(event) {
     if (!API_KEY) {
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: "SCRAPINGBEE_API_KEY not set" }),
+        body: JSON.stringify({ error: "SCRAPINGBEE_API_KEY not set in Netlify" }),
       };
     }
 
-    // ScrapingBee request
-    const response = await fetch(
-      `https://app.scrapingbee.com/api/v1/?api_key=${API_KEY}&url=https://www.instagram.com/${username}/&render_js=true`
+    // Encode Instagram URL properly
+    const targetUrl = encodeURIComponent(
+      `https://www.instagram.com/${username}/`
     );
 
+    const scrapingUrl = `https://app.scrapingbee.com/api/v1/?api_key=${API_KEY}&url=${targetUrl}&render_js=true&premium_proxy=true&country_code=us`;
+
+    const response = await fetch(scrapingUrl);
+
+    // 🔥 Show real ScrapingBee error if it fails
     if (!response.ok) {
+      const errorText = await response.text();
+
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: "ScrapingBee request failed" }),
+        body: JSON.stringify({
+          error: "ScrapingBee request failed",
+          status: response.status,
+          details: errorText,
+        }),
       };
     }
 
     const html = await response.text();
 
-    // Extract bio using regex
-    const bioMatch = html.match(/"biography":"(.*?)"/);
-    const picMatch = html.match(/"profile_pic_url_hd":"(.*?)"/);
+    // Try safer extraction
+    const bioMatch = html.match(/"biography":"([^"]*)"/);
+    const picMatch = html.match(/"profile_pic_url_hd":"([^"]*)"/);
 
     const bio = bioMatch ? bioMatch[1] : null;
-    const profilePic = picMatch ? picMatch[1].replace(/\\u0026/g, "&") : null;
+    const profilePic = picMatch
+      ? picMatch[1].replace(/\\u0026/g, "&")
+      : null;
 
     if (!bio && !profilePic) {
       return {
         statusCode: 404,
-        body: JSON.stringify({ error: "Instagram profile not found or blocked" }),
+        body: JSON.stringify({
+          error: "Instagram profile found but data extraction failed",
+        }),
       };
     }
 
