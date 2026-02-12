@@ -1,4 +1,4 @@
-  export async function handler(event) {
+export async function handler(event) {
   if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
@@ -16,35 +16,54 @@
       };
     }
 
+    const APIFY_TOKEN = process.env.APIFY_TOKEN;
+
+    if (!APIFY_TOKEN) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: "Missing APIFY_TOKEN in environment variables" }),
+      };
+    }
+
+    // 🔥 Call Apify Instagram scraper actor
     const response = await fetch(
-      `https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`,
+      `https://api.apify.com/v2/acts/apify~instagram-profile-scraper/run-sync-get-dataset-items?token=${APIFY_TOKEN}`,
       {
+        method: "POST",
         headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
-          "x-ig-app-id": "936619743392459"
-        }
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          usernames: [username],
+        }),
       }
     );
 
     if (!response.ok) {
       return {
-        statusCode: 404,
-        body: JSON.stringify({ error: "Profile not found or blocked" }),
+        statusCode: 500,
+        body: JSON.stringify({ error: "Failed to fetch from Apify" }),
       };
     }
 
     const data = await response.json();
 
-    const user = data.data.user;
+    if (!data || data.length === 0) {
+      return {
+        statusCode: 404,
+        body: JSON.stringify({ error: "Profile not found" }),
+      };
+    }
+
+    const profile = data[0];
 
     return {
       statusCode: 200,
       body: JSON.stringify({
         success: true,
-        bio: user.biography,
-        profilePic: user.profile_pic_url_hd,
-        followers: user.edge_followed_by.count
+        bio: profile.biography,
+        profilePic: profile.profilePicUrl,
+        followers: profile.followersCount,
       }),
     };
 
@@ -52,9 +71,9 @@
     return {
       statusCode: 500,
       body: JSON.stringify({
-        error: "Failed to fetch Instagram data",
+        error: "Server error",
         details: err.message,
       }),
     };
   }
-  }
+}
