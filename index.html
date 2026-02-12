@@ -1,28 +1,30 @@
 <input type="text" id="username" placeholder="Instagram username">
-<input type="text" id="code" placeholder="Verification code">
-<button onclick="verify()">Verify</button>
+<button onclick="fetchProfile()">Get Profile</button>
+
+<div id="profileResult"></div>
 
 <script>
-async function verify() {
-  const username = document.getElementById("username").value;
-  const code = document.getElementById("code").value;
+async function fetchProfile() {
+  const username = document.getElementById("username").value.trim();
+  if (!username) return alert("Enter a username");
 
   const res = await fetch("/.netlify/functions/verifyInstagram", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ username, code }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username }),
   });
 
   const data = await res.json();
-
   console.log(data);
 
-  if (data.verified) {
-    alert("Verified ✅");
-  } else {
-    alert("Not Verified ❌");
+  if (data.error) {
+    document.getElementById("profileResult").innerHTML = data.error;
+    return;
   }
+
+  document.getElementById("profileResult").innerHTML = `
+    <p><strong>Bio:</strong> ${data.bio}</p>
+    <img src="${data.profilePicUrl}" width="150" />
+  `;
 }
 </script>
