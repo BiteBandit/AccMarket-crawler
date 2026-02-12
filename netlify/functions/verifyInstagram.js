@@ -1,7 +1,15 @@
-import fetch from "node-fetch"; // Netlify function Node environment
+import chromium from "chrome-aws-lambda";
+import puppeteer from "puppeteer-core";
 
 export async function handler(event, context) {
   try {
+    if (event.httpMethod !== "POST") {
+      return {
+        statusCode: 405,
+        body: JSON.stringify({ error: "Method not allowed" }),
+      };
+    }
+
     const { username } = JSON.parse(event.body);
 
     if (!username) {
@@ -11,48 +19,51 @@ export async function handler(event, context) {
       };
     }
 
-    // Instagram public profile URL
-    const url = `https://www.instagram.com/${username}/?__a=1&__d=dis`;
-
-    // Fetch the profile data
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-      },
+    // Launch Puppeteer
+    const browser = await puppeteer.launch({
+      args: chromium.args,
+      executablePath: await chromium.executablePath,
+      headless: chromium.headless,
     });
 
-    if (!response.ok) {
-      return {
-        statusCode: 404,
-        body: JSON.stringify({ error: "Profile not found" }),
-      };
-    }
+    const page = await browser.newPage();
 
-    const json = await response.json();
+    // Go to Instagram profile
+    const url = `https://www.instagram.com/${username}/`;
+    await page.goto(url, { waitUntil: "networkidle2" });
 
-    // Instagram v2 structure for user
-    const user = json.graphql?.user || json?.graphql?.user;
+    // Scrape bio & profile pic
+    const data = await page.evaluate(() => {
+      const bioEl = document.querySelector("meta[name='description']");
+      const profilePicEl = document.querySelector("img[alt*='profile picture']");
 
-    if (!user) {
-      return {
-        statusCode: 404,
-        body: JSON.stringify({ error: "Could not extract user info" }),
-      };
-    }
+      let bio = null;
+      let profilePic = null;
 
-    const bio = user.biography || "";
-    const profilePicUrl = user.profile_pic_url_hd || user.profile_pic_url;
+      if (bioEl) {
+        const content = bioEl.getAttribute("content");
+        // Instagram meta description format: "X followers, Y following, Z posts - Bio text"
+        bio = content.split(" - ").pop(); // grab the last part
+      }
+
+      if (profilePicEl) {
+        profilePic = profilePicEl.src;
+      }
+
+      return { bio, profilePic };
+    });
+
+    await browser.close();
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ bio, profilePicUrl }),
+      body: JSON.stringify({ success: true, ...data }),
     };
   } catch (err) {
-    console.error(err);
+    console.error("Error in verifyInstagram:", err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Server error" }),
+      body: JSON.stringify({ error: err.message }),
     };
   }
 }
