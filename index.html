@@ -1,30 +1,137 @@
-<input type="text" id="username" placeholder="Instagram username">
-<button onclick="fetchProfile()">Get Profile</button>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Instagram Verification | AccMarket</title>
+  <style>
+    /* --- Global Styles --- */
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #121212;
+      color: #f5f5f5;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
 
-<div id="profileResult"></div>
+    /* --- Card --- */
+    .verify-card {
+      background: #1e1e1e;
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+      width: 350px;
+      text-align: center;
+    }
 
-<script>
-async function fetchProfile() {
-  const username = document.getElementById("username").value.trim();
-  if (!username) return alert("Enter a username");
+    h2 {
+      margin-bottom: 20px;
+      color: #7f5af0; /* AccMarket accent purple */
+    }
 
-  const res = await fetch("/.netlify/functions/verifyInstagram", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username }),
-  });
+    input[type="text"] {
+      width: 100%;
+      padding: 12px 15px;
+      margin: 10px 0;
+      border-radius: 10px;
+      border: none;
+      background-color: #2a2a2a;
+      color: #f5f5f5;
+      font-size: 16px;
+    }
 
-  const data = await res.json();
-  console.log(data);
+    input[type="text"]::placeholder {
+      color: #aaa;
+    }
 
-  if (data.error) {
-    document.getElementById("profileResult").innerHTML = data.error;
-    return;
-  }
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 15px;
+      background-color: #7f5af0;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
 
-  document.getElementById("profileResult").innerHTML = `
-    <p><strong>Bio:</strong> ${data.bio}</p>
-    <img src="${data.profilePicUrl}" width="150" />
-  `;
-}
-</script>
+    button:hover {
+      background-color: #6448c7;
+    }
+
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #2a2a2a;
+      border-radius: 10px;
+      font-size: 14px;
+      word-break: break-word;
+    }
+
+    img.profile-pic {
+      margin-top: 15px;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 2px solid #7f5af0;
+    }
+  </style>
+</head>
+<body>
+  <div class="verify-card">
+    <h2>Instagram Verification</h2>
+    <input type="text" id="username" placeholder="Instagram username">
+    <button onclick="verify()">Verify</button>
+
+    <div class="result" id="result" style="display:none;">
+      <p id="bio"></p>
+      <img id="profilePic" class="profile-pic" src="" alt="Profile Picture">
+    </div>
+  </div>
+
+  <script>
+    async function verify() {
+      const username = document.getElementById("username").value;
+      const resultDiv = document.getElementById("result");
+      const bioP = document.getElementById("bio");
+      const profileImg = document.getElementById("profilePic");
+
+      if (!username) {
+        alert("Please enter a username");
+        return;
+      }
+
+      resultDiv.style.display = "none";
+      bioP.textContent = "";
+      profileImg.src = "";
+
+      try {
+        const res = await fetch("/.netlify/functions/verifyInstagram", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username }),
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
+          alert("Error: " + data.error);
+        } else {
+          bioP.textContent = "Bio: " + data.bio;
+          profileImg.src = data.img;
+          resultDiv.style.display = "block";
+        }
+      } catch (err) {
+        alert("Something went wrong. Check console.");
+        console.error(err);
+      }
+    }
+  </script>
+</body>
+</html>
