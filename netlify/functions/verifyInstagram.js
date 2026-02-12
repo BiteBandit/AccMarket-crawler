@@ -12,7 +12,7 @@ export async function handler(event) {
     if (!username) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Username is required" }),
+        body: JSON.stringify({ error: "Enter a valid Instagram username" }),
       };
     }
 
@@ -21,11 +21,11 @@ export async function handler(event) {
     if (!APIFY_TOKEN) {
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: "Missing APIFY_TOKEN in environment variables" }),
+        body: JSON.stringify({ error: "Missing APIFY_TOKEN" }),
       };
     }
 
-    // 🔥 Call Apify Instagram scraper actor
+    // 🔥 Run Apify actor
     const response = await fetch(
       `https://api.apify.com/v2/acts/apify~instagram-profile-scraper/run-sync-get-dataset-items?token=${APIFY_TOKEN}`,
       {
@@ -42,7 +42,7 @@ export async function handler(event) {
     if (!response.ok) {
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: "Failed to fetch from Apify" }),
+        body: JSON.stringify({ error: "Apify request failed" }),
       };
     }
 
@@ -51,7 +51,7 @@ export async function handler(event) {
     if (!data || data.length === 0) {
       return {
         statusCode: 404,
-        body: JSON.stringify({ error: "Profile not found" }),
+        body: JSON.stringify({ error: "Instagram profile not found" }),
       };
     }
 
@@ -61,9 +61,13 @@ export async function handler(event) {
       statusCode: 200,
       body: JSON.stringify({
         success: true,
+        username: profile.username,
         bio: profile.biography,
         profilePic: profile.profilePicUrl,
         followers: profile.followersCount,
+        following: profile.followsCount,
+        posts: profile.postsCount,
+        verified: profile.verified,
       }),
     };
 
