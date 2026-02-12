@@ -1,51 +1,91 @@
 import chromium from "chrome-aws-lambda";
 
 export async function handler(event, context) {
-  try {
-    // Only allow POST requests
-    if (event.httpMethod !== "POST") {
-      return {
-        statusCode: 405,
-        body: JSON.stringify({ error: "Method not allowed" }),
-      };
-    }
+  if (event.httpMethod !== "POST") {
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ error: "Method not allowed" }),
+    };
+  }
 
+  try {
     const { username } = JSON.parse(event.body || "{}");
+
     if (!username) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Missing username" }),
+        body: JSON.stringify({ error: "Username is required" }),
       };
     }
 
-    // Launch browser using chrome-aws-lambda
     const browser = await chromium.puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
+      args: [
+        ...chromium.args,
+        "--disable-blink-features=AutomationControlled",
+      ],
+      defaultViewport: {
+        width: 1280,
+        height: 800,
+      },
       executablePath: await chromium.executablePath,
-      headless: chromium.headless,
+      headless: true,
     });
 
     const page = await browser.newPage();
-    await page.goto(`https://www.instagram.com/${username}/`, { waitUntil: "networkidle2" });
 
-    // Get bio
-    const bio = await page.$eval('meta[property="og:description"]', el => el.content);
+    // ✅ Set realistic user agent
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    );
 
-    // Get profile picture
-    const img = await page.$eval('img[alt*="profile picture"]', el => el.src);
+    // ✅ Extra headers
+    await page.setExtraHTTPHeaders({
+      "accept-language": "en-US,en;q=0.9",
+    });
+
+    // ✅ Remove webdriver flag
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, "webdriver", {
+        get: () => false,
+      });
+    });
+
+    const url = `https://www.instagram.com/${username}/`;
+
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
+
+    // small delay (helps avoid bot detection)
+    await page.waitForTimeout(3000);
+
+    const data = await page.evaluate(() => {
+      const meta = document.querySelector('meta[property="og:description"]');
+      const bio = meta ? meta.content : null;
+
+      const img = document.querySelector("img");
+      const profilePic = img ? img.src : null;
+
+      return { bio, profilePic };
+    });
 
     await browser.close();
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ bio, img }),
+      body: JSON.stringify({
+        success: true,
+        bio: data.bio,
+        profilePic: data.profilePic,
+      }),
     };
-  } catch (err) {
-    console.error("Error in verifyInstagram:", err);
+  } catch (error) {
+    console.error("Scrape Error:", error);
+
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Failed to fetch Instagram data", details: err.message }),
+      body: JSON.stringify({
+        error: "Failed to fetch Instagram data",
+        details: error.message,
+      }),
     };
   }
 }
